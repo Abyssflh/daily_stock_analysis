@@ -1,0 +1,66 @@
+name: 每日股票分析
+
+on:
+  schedule:
+    # 每天北京时间 18:00 运行 (UTC 10:00)
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    inputs:
+      stocks:
+        description: '要分析的股票代码（逗号分隔，如：600519,300750）'
+        required: false
+        default: ''
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 设置 Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 运行股票分析
+      env:
+        # AI 模型配置 - 智增增 DeepSeek Reasoner
+        LLM_CHANNELS: zhizengzeng
+        LLM_ZHIZENGZENG_PROTOCOL: openai
+        LLM_ZHIZENGZENG_BASE_URL: https://api.zhizengzeng.com/v1
+        LLM_ZHIZENGZENG_API_KEY: ${{ secrets.ZHIZENGZENG_API_KEY }}
+        LLM_ZHIZENGZENG_MODELS: deepseek-reasoner
+        LLM_TEMPERATURE: 1.0
+        
+        # 股票列表
+        STOCK_LIST: ${{ secrets.STOCK_LIST || '600519,300750,002594,000858,601888,600036,601318' }}
+        
+        # 飞书推送
+        FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        
+        # 报告配置
+        REPORT_TYPE: full
+        SCHEDULE_ENABLED: false
+        SCHEDULE_RUN_IMMEDIATELY: true
+        
+      run: |
+        if [ -n "${{ github.event.inputs.stocks }}" ]; then
+          python main.py --stocks ${{ github.event.inputs.stocks }} --market-review
+        else
+          python main.py --market-review
+        fi
+        
+    - name: 上传报告
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: stock-reports
+        path: reports/
+        retention-days: 30

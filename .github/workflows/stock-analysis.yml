@@ -1,7 +1,6 @@
 name: 每日股票分析
 
 on:
-  # 手动触发
   workflow_dispatch:
     inputs:
       mode:
@@ -34,6 +33,28 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       
+      - name: 检查 Secrets
+        run: |
+          echo "检查环境变量..."
+          if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "❌ OPENAI_API_KEY 未设置"
+            exit 1
+          else
+            echo "✅ OPENAI_API_KEY 已设置"
+          fi
+          
+          if [ -z "${{ secrets.OPENAI_BASE_URL }}" ]; then
+            echo "⚠️ OPENAI_BASE_URL 未设置，将使用默认值"
+          else
+            echo "✅ OPENAI_BASE_URL 已设置"
+          fi
+          
+          if [ -z "${{ secrets.OPENAI_MODEL }}" ]; then
+            echo "⚠️ OPENAI_MODEL 未设置，将使用默认值"
+          else
+            echo "✅ OPENAI_MODEL 已设置"
+          fi
+      
       - name: 安装依赖
         run: |
           pip install --upgrade pip
@@ -44,15 +65,11 @@ jobs:
       
       - name: 执行股票分析
         env:
-          # AI 配置
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
-          
-          # 通知配置
           WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
-          
-          # 强制运行（跳过交易日检查）
           SCHEDULE_RUN_IMMEDIATELY: true
-          
-        run: python main.py --stocks 600519 --force-run --notify
+          DEBUG: true
+        run: |
+          python main.py --stocks 600519 --force-run --notify 2>&1 || echo "Exit code: $?"

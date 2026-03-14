@@ -36,33 +36,6 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       
-      - name: 检查 Secrets
-        run: |
-          echo "检查环境变量..."
-          if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
-            echo "❌ OPENAI_API_KEY 未设置"
-          else
-            echo "✅ OPENAI_API_KEY 已设置"
-          fi
-          
-          if [ -z "${{ secrets.WECHAT_WEBHOOK_URL }}" ]; then
-            echo "❌ WECHAT_WEBHOOK_URL 未设置"
-          else
-            echo "✅ WECHAT_WEBHOOK_URL 已设置"
-          fi
-      
-      - name: 测试企业微信推送
-        run: |
-          if [ -n "${{ secrets.WECHAT_WEBHOOK_URL }}" ]; then
-            echo "测试发送消息到企业微信..."
-            curl -X POST ${{ secrets.WECHAT_WEBHOOK_URL }} \
-              -H 'Content-Type: application/json' \
-              -d '{"msgtype": "text", "text": {"content": "GitHub Actions 测试消息\n时间：'$(date)'\n状态：配置成功"}}' \
-              -v
-          else
-            echo "⚠️ WECHAT_WEBHOOK_URL 未设置，跳过测试"
-          fi
-      
       - name: 安装依赖
         run: |
           pip install --upgrade pip
@@ -77,7 +50,48 @@ jobs:
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+          WECHAT_MSG_TYPE: markdown
           SCHEDULE_RUN_IMMEDIATELY: true
-          DEBUG: true
         run: |
-          python main.py --stocks 600519 --force-run --notify 2>&1
+          echo "开始分析..."
+          python main.py --stocks 600519 --force-run
+        continue-on-error: true
+      
+      - name: 发送报告到企业微信
+        if: always()
+        env:
+          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+        run: |
+          if [ -f reports/stock_analysis_*.md ]; then
+            echo "找到报告文件，发送中..."
+            python -c "
+import requests
+import os
+import glob
+
+webhook = os.getenv('WECHAT_WEBHOOK_URL')
+if not webhook:
+    print('⚠️ WECHAT_WEBHOOK_URL not set')
+    exit(0)
+
+# 读取最新的报告
+files = glob.glob('reports/stock_analysis_*.md')
+if files:
+    files.sort(key=os.path.getmtime, reverse=True)
+    with open(files[0], 'r', encoding='utf-8') as f:
+        content = f.read()[:4000]  # 限制长度
+    
+    data = {
+        'msgtype': 'markdown',
+        'markdown': {'content': content}
+    }
+    
+    resp = requests.post(webhook, json=data)
+    print(f'Status: {resp.status_code}')
+    print(f'Response: {resp.text}')
+else:
+    print('⚠️ No report files found')
+"
+          else
+            echo "⚠️ 未找到报告文件"
+          fi

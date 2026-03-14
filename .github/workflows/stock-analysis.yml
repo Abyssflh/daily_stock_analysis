@@ -41,21 +41,26 @@ jobs:
           echo "检查环境变量..."
           if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
             echo "❌ OPENAI_API_KEY 未设置"
-            exit 1
           else
             echo "✅ OPENAI_API_KEY 已设置"
           fi
           
-          if [ -z "${{ secrets.OPENAI_BASE_URL }}" ]; then
-            echo "⚠️ OPENAI_BASE_URL 未设置，将使用默认值"
+          if [ -z "${{ secrets.WECHAT_WEBHOOK_URL }}" ]; then
+            echo "❌ WECHAT_WEBHOOK_URL 未设置"
           else
-            echo "✅ OPENAI_BASE_URL 已设置"
+            echo "✅ WECHAT_WEBHOOK_URL 已设置"
           fi
-          
-          if [ -z "${{ secrets.OPENAI_MODEL }}" ]; then
-            echo "⚠️ OPENAI_MODEL 未设置，将使用默认值"
+      
+      - name: 测试企业微信推送
+        run: |
+          if [ -n "${{ secrets.WECHAT_WEBHOOK_URL }}" ]; then
+            echo "测试发送消息到企业微信..."
+            curl -X POST ${{ secrets.WECHAT_WEBHOOK_URL }} \
+              -H 'Content-Type: application/json' \
+              -d '{"msgtype": "text", "text": {"content": "GitHub Actions 测试消息\n时间：'$(date)'\n状态：配置成功"}}' \
+              -v
           else
-            echo "✅ OPENAI_MODEL 已设置"
+            echo "⚠️ WECHAT_WEBHOOK_URL 未设置，跳过测试"
           fi
       
       - name: 安装依赖
@@ -75,4 +80,4 @@ jobs:
           SCHEDULE_RUN_IMMEDIATELY: true
           DEBUG: true
         run: |
-          python main.py --stocks 600519 --force-run --notify 2>&1 || echo "Exit code: $?"
+          python main.py --stocks 600519 --force-run --notify 2>&1
